@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<style>
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #151515;
+}
+
+#instructions {
+    float: left;
+    font-family: sans-serif;
+    color: #757575;
+}
+
+.key {
+    color: #aaffdd;
+}
+#score {
+    width: 1300px;
+    color:  #aaffdd;
+    font-size: 150%;
+    font-family: sans-serif;
+    text-align: right;
+    display: block;
+}
+
+#game-over, #game-over-overlay {
+    margin: auto;
+    width: 512px;
+    height: 480px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+}
+
+#game-over-overlay {
+    background-color: black;
+    opacity: .5;
+}
+
+#game-over {
+    height: 200px;
+    text-align: center;
+    color: white;
+}
+
+#game-over h1 {
+    font-size: 3em;
+    color: #aaffdd;
+    font-family: sans-serif;
+}
+
+#game-over h2 {
+    font-size: 3em;
+    color: #3399ff;
+    font-family: sans-serif;
+}
+
+#game-over button {
+    font-size: 1.5em;
+}
+</style>
+<head>
+<title></title>
+<script>
+
+//Game Area
+var canvas;
+var ctx;
+
+//Game over
+var isGameOver= false;
+
+//Loading images
+var img = new Image();
+img.src = "Images/background.png";
+
+var char = new Image();
+char.src = 'Images/char.png';
+var rchar = new Image();
+rchar.src = 'Images/char_rev.png';
+
+//Player Characteristics
+var Character= null;
+var x=0;
+var y=320;
+var vx= 0;
+var vy= 0;
+var walkingRight= false;
+var walkingLeft= false;
+var jumping= false;
+
+//Obstacle class
+function component(vox) {
+    this.ox= 1300;
+    this.oy= 385;
+    this.vox= vox;
+    
+    this.update = function() {
+        ctx.drawImage(obs, 0, 0, 236, 235, this.ox, this.oy, 60, 50);
+    }
+    
+    this.crashWith = function(x, y) {
+        var myleft = this.ox;
+        var myright = this.ox + 60;
+        var mytop = this.oy;
+        var mybottom = this.oy + 50;
+        var otherleft = x;
+        var otherright = x + 65;
+        var othertop = y;
+        var otherbottom = y + 115;
+        var crash = true;
+        if ((mybottom < othertop) || (mytop > otherbottom) || (myright < otherleft) || (myleft > otherright)) {
+            crash = false;
+        }
+        return crash;
+    }
+}
+
+//Obstacles
+var obs= new Image();
+obs.src= "Images/obstacle.jpg";
+var myObs= [];
+var ox, oy, i;
+var vox;
+
+//Score
+var frameNo=0;
+
+function onLoad() {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    idle();
+    window.requestAnimFrame = (function(){
+    return  window.requestAnimationFrame       ||
+            window.webkitRequestAnimationFrame ||
+            window.mozRequestAnimationFrame    ||
+            window.oRequestAnimationFrame      ||
+            window.msRequestAnimationFrame     ||
+            function( callback ){
+              window.setTimeout(callback, 1000 / 60);
+            };
+})();
+    window.cancelRequestAnimFrame = ( function() {
+    return window.cancelAnimationFrame          ||
+        window.webkitCancelRequestAnimationFrame    ||
+        window.mozCancelRequestAnimationFrame       ||
+        window.oCancelRequestAnimationFrame     ||
+        window.msCancelRequestAnimationFrame        ||
+        clearTimeout
+} )();
+}
+
+function idle() {
+    Character= char;
+    frame= 0;
+    redraw();  
+}
+
+//Changing frame
+var frame = 0;
+var delta;
+var lastUpdateTime = 0;
+var acDelta = 0;
+var msPerFrame = 100;
+var requestID;
+var max; 
+
+function animation() {
+    if(Character== char || Character== rchar) {
+    requestID= requestAnimFrame(animation);
+    
+    delta = Date.now() - lastUpdateTime;
+    if (acDelta > msPerFrame)
+    {
+        acDelta = 0;
+        redraw();
+        for (i = 0; i < myObs.length; i += 1) {
+        if (myObs[i].crashWith( x, y )) {
+            cancelRequestAnimFrame(requestID);
+            gameOver();
+            return;
+        }
+        }
+        if(jumping != true){
+        if(Character== char) {
+            frame++; 
+        }
+        if(Character== rchar) {
+            frame--;
+        }
+        }
+        else {
+            if(Character== char) {frame=0;}
+            if(Character== rchar) {frame=7;}
+        }    
+        update();
+        checkBoundary();
+        if(Character== char) {
+        if (frame >= 7) frame = 0;
+        }
+        if(Character== rchar) {
+        if (frame <= 0) frame = 7;
+        }
+    } 
+    else
+    {
+        acDelta += delta;
+    }
+
+    lastUpdateTime = Date.now();
+    }   
+    
+}
+
+function update() {
+    
+    frameNo += 1;
+        document.getElementById("score").innerHTML= "Score: "+frameNo;    
+    if(walkingRight== true||walkingLeft== true||jumping== true){
+        x +=vx;
+        y +=vy;
+    } 
+    
+    
+    max= Math.floor(Math.random() * (200-90 + 1)) +90 ;
+    if ((Math.floor(Math.random() * (max- 1 + 1)) + 1)%19==0) {        
+        vox= -1*(Math.floor(Math.random() * (40 - 1 + 1)) + 1);
+        myObs.push(new component(vox));        
+    }
+    for (i = 0; i< myObs.length; i+=1) {
+       myObs[i].ox += myObs[i].vox;
+    }  
+    removeObs();
+}
+
+//Removing obstacles
+var index;
+function removeObs() {
+    
+    for (i = 0; i< myObs.length; i+=1) {
+        if( ( myObs[i].ox + 60 ) < 0 ) { index= i; }
+        else { index= -1; }
+    }
+    if (index > -1) {
+    myObs.splice(index, 1);
+    }
+}
+
+function redraw() {
+    clear();
+    ctx.drawImage(img, 0, 0, 800, 400, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(Character, (frame*184), 0, 184, 325, x, y, 70, 115);
+    for (i = 0; i < myObs.length; i += 1) {
+    myObs[i].update();
+    }
+}
+
+function clear() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+    
+function checkBoundary() {
+        if ((x+70)+ vx > canvas.width) { x= canvas.width -70;}
+        if (x-vx <0 ) { x=0; }
+        if(y<0) { y= 0;}
+        if( y<250 ) { vy= 4;}
+        if (y+vy>320){ 
+            vy=0; 
+            y= 320; 
+            if(jumping=== true){
+                if(Character=== char) {
+                    jumping= walkingRight= walkingLeft= false;
+                    vx= 0;
+                    frame=0; 
+                }
+                else if(Character=== rchar) { 
+                    jumping= walkingLeft= walkingRight= false;
+                    vx= 0;
+                    frame=7; 
+                }
+            }   
+        }
+    }
+    
+//If game over, prints message
+function gameOver() {
+  document.getElementById('endScore').innerHTML = "Total Score: "+ frameNo;
+  document.getElementById('game-over').style.display = 'block';
+  document.getElementById('game-over-overlay').style.display = 'block';
+  document.getElementById('score').style.display = 'none';
+  isGameOver = true;
+}
+
+//If the game is over and restart button is clicked, restarts game
+function restart() {
+    if(isGameOver) {
+        x= 0; 
+        y= 320;
+        vx= 0;
+        vy= 0;
+        walkingRight= false;
+        walkingLeft= false;
+        jumping= false;
+        myObs= [];
+        frameNo= 0;
+        lastUpdateTime = 0;
+        acDelta = 0;
+        index= -1;
+        document.getElementById('game-over').style.display = 'none';
+  document.getElementById('game-over-overlay').style.display = 'none';
+  document.getElementById('score').style.display = 'block';
+  isGameOver = false;
+        clear();
+        idle();
+    }
+}
+    
+//Keyboard control
+var keyCode;
+var flag= false;
+
+window.addEventListener("keydown", function(e){
+    keyCode= e.keyCode;
+    if(keyCode=='38'){
+        flag= true;
+        checkKey(flag, keyCode);
+    }
+    if(flag== false){
+        flag= true;
+        checkKey(flag, keyCode);
+    }
+    
+});
+window.addEventListener("keyup", function(e){
+    keyCode= e.keyCode;
+    flag= false;
+    checkKey(flag, keyCode);
+});
+
+function checkKey (flag, keyCode) {
+  if(flag){
+    if(keyCode == '39') {
+       walkingRight= true;
+       jumping= walkingLeft= false;
+       Character= char;
+       vx=8;
+       frame=0;
+       requestID= requestAnimFrame(animation);
+    }
+    
+    else if(keyCode == '37') {
+        walkingLeft= true;
+        walkingRight= jumping = false;
+        Character= rchar;
+        vx= -8;
+        frame= 7;
+        requestID= requestAnimFrame(animation);
+    }
+    
+    else if(keyCode == '38') {
+        jumping = true;
+        if(Character== char) {
+            walkingRight= true;
+            walkingLeft= false;
+            vx= 2;
+            vy= -12 ;
+            frame= 7;
+        }
+        else if(Character== rchar) {
+            walkingLeft= true;
+            walkingRight= false;
+            vx= -2;
+            vy= -12 ;
+            frame= 0;
+        }
+        requestID= requestAnimFrame(animation);
+        walkingRight= walkingLeft= false;
+    } 
+    
+    else if( keyCode== '32'){
+        walkingRight= true;
+        animation();
+    }    
+  }
+  
+  else{
+      if(keyCode == '39') {
+      walkingRight=jumping= walkingLeft= false;
+      Character= char;
+      vx=0;
+      frame=0;
+      requestID= requestAnimFrame(animation);
+    }
+    
+      else if(keyCode == '37') {
+        walkingRight= walkingLeft=jumping = false;
+        Character= rchar;
+        vx= 0;
+        frame= 7;
+        requestID= requestAnimFrame(animation);
+    }    
+  }
+}                                                    
+</script>
+</head>
+
+<body onload="onLoad()">
+  <canvas id="canvas" width="1300" height="500"></canvas>
+  <div id="instructions">
+        <div>
+        Press <span class="key">Spacebar</span> to start.<br>
+        Move with <span class="key">arrows ( left, right, and up )</span>
+        </div>
+    </div>
+   <div id="score"></div>
+  <div id="game-over-overlay"></div>
+  <div id="game-over">
+      <h1>GAME OVER</h1>
+      <h2 id="endScore"></h2>
+      <button id="play-again" onclick= "restart()">Play Again</button>
+  </div>
+</body>
+
+</html>
